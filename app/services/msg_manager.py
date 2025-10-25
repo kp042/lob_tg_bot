@@ -3,11 +3,11 @@ import logging
 import asyncio
 from aiogram import Bot
 from aiogram.types import FSInputFile
-from config.config import config
-
+from core.config import config
+from core.app_context import app_context
 
 # load bot
-bot = Bot(token=config.tg_bot.token)
+# bot = Bot(token=config.tg_bot.token)
 
 
 async def send_image(chat_id, image_filename, msg):    
@@ -19,7 +19,7 @@ async def send_image(chat_id, image_filename, msg):
         # image_path = os.path.join(tgbot_dir, image_filename)
         # photo = FSInputFile(image_path)
         photo = FSInputFile(image_filename)
-        await bot.send_photo(
+        await app_context.bot.send_photo(
             chat_id=chat_id,
             photo=photo,
             caption=msg,
@@ -28,14 +28,14 @@ async def send_image(chat_id, image_filename, msg):
     except Exception as e:
         logging.error(f"Send image error: {e}")
         await asyncio.sleep(5)
-        await bot.send_photo(chat_id=chat_id, photo=photo, caption=msg)
+        await app_context.bot.send_photo(chat_id=chat_id, photo=photo, caption=msg)
     finally:
         os.remove(image_filename)
 
 
 async def send_msg(chat_id, msg):
     try:
-        await bot.send_message(
+        await app_context.bot.send_message(
             chat_id=chat_id,
             text=str(msg),
             request_timeout=15
@@ -43,4 +43,4 @@ async def send_msg(chat_id, msg):
     except Exception as e:
         logging.error(f"Send message error: {e}")
         await asyncio.sleep(3)
-        await bot.send_message(chat_id=chat_id, text=str(msg))
+        await app_context.bot.send_message(chat_id=chat_id, text=str(msg))
