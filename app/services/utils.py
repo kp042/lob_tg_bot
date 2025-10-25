@@ -20,101 +20,166 @@ def get_depths(depth_type: DepthType) -> list[str]:
     return depths[depth_type]
 
 
-def split_list_into_strings(lst, max_length=4095, separator=', '):
+def split_list_into_strings(lst, max_length=4000, separator=', '):
+    """
+    Split list into multiple strings without exceeding max_length
+    """
+    if not lst:
+        return []
+    
     results = []
-    current_string = ''
-    for element in lst:
-        if current_string:
-            next_string = current_string + separator + element
+    current_chunk = []
+    current_length = 0
+    
+    for item in lst:
+        item_str = str(item)
+        item_length = len(item_str)
+        
+        # Calculate new length including separator if not first item
+        if current_chunk:
+            new_length = current_length + len(separator) + item_length
         else:
-            next_string = element
-        if len(next_string) > max_length:
-            if current_string:
-                results.append(current_string)
-            current_string = element
-            if len(element) > max_length:
-                # Если отдельный элемент длиннее max_length,
-                # его можно обработать отдельно или всё равно добавить
-                pass
+            new_length = item_length
+        
+        # If adding this item would exceed limit, save current chunk and start new one
+        if new_length > max_length:
+            if current_chunk:
+                chunk_text = separator.join(current_chunk)
+                results.append(chunk_text)
+                logging.debug(f"Created chunk with length {len(chunk_text)}")
+                current_chunk = [item_str]
+                current_length = item_length
+            else:
+                # Single item is too long, truncate it
+                truncated = item_str[:max_length]
+                results.append(truncated)
+                logging.warning(f"Truncated long item: {item_str}")
+                current_chunk = []
+                current_length = 0
         else:
-            current_string = next_string
-    if current_string:
-        results.append(current_string)
+            current_chunk.append(item_str)
+            current_length = new_length
+    
+    # Add the last chunk if not empty
+    if current_chunk:
+        chunk_text = separator.join(current_chunk)
+        results.append(chunk_text)
+        logging.debug(f"Created final chunk with length {len(chunk_text)}")
+    
+    logging.info(f"Split {len(lst)} items into {len(results)} chunks")
     return results
+
+# def split_list_into_strings(lst, max_length=4095, separator=', '):
+#     results = []
+#     current_string = ''
+#     for element in lst:
+#         if current_string:
+#             next_string = current_string + separator + element
+#         else:
+#             next_string = element
+#         if len(next_string) > max_length:
+#             if current_string:
+#                 results.append(current_string)
+#             current_string = element
+#             if len(element) > max_length:                
+#                 pass
+#         else:
+#             current_string = next_string
+#     if current_string:
+#         results.append(current_string)
+#     return results
 
 
 def make_chart_depth(df: pd.DataFrame, pct: int, depth_type: int):
     """
-    df - dataframe
-    pct - depth percent
-    depth_type - chart type depends on depth visualisation (0 - bids/asks, 1 - k bids/asks, 2 - difference %)
+    Generate depth chart
     
-    
+    Args:
+        df: DataFrame with LOB data
+        pct: depth percent (1, 3, 5, 8)
+        depth_type: chart type (0 - bids/asks, 1 - k bids/asks, 2 - difference %)
     """
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    df = df.sort_values('timestamp').reset_index(drop=True)
-
+    if df.empty:
+        raise ValueError("DataFrame is empty")
     
-    width_px = 500  # Ширина в пикселях
-    height_px = 900  # Высота в пикселях
-
-    # filename = "output_graph.png"  # Имя файла для сохранения
+    # Use event_time as timestamp
+    if 'event_time' not in df.columns:
+        raise ValueError("DataFrame must contain 'event_time' column")
+    
+    df_sorted = df.sort_values('event_time').reset_index(drop=True)
+    
+    # Chart setup
+    width_px, height_px = 500, 900
     filename = os.path.join(os.path.dirname(__file__), "output_graph.png")
-
-    dpi = 100  # Разрешение (DPI)
-    # Переводим пиксели в дюймы (1 дюйм = dpi пикселей)
-    fig_width = width_px / dpi
-    fig_height = height_px / dpi
-
-    # Темный фон
-    plt.style.use('dark_background')
-    # Создаем фигуру с заданными размерами
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(fig_width, fig_height), sharex=True, dpi=dpi)
-
-    # Верхний график: best_bid
-    ax1.plot(df['timestamp'], df['best_bid'], color='white')  # Без маркеров
-    ax1.set_ylabel('Best Bid', color='white')
-    ax1.tick_params(axis='y', colors='white')
-    ax1.grid(True, linestyle='--', alpha=0.3, color='gray')
-
-    depth_lst = get_depths(pct)
-
-    description = ""
-
-    # Нижний график: 
-    if depth_type == 0:
-        description = f"Depth ({pct}% Bid/Ask)"
-        ax2.plot(df['timestamp'], df[depth_lst[0]], color='green')  # Без маркеров
-        ax2.plot(df['timestamp'], df[depth_lst[1]], color='red')
-        ax2.set_ylabel(description, color='white')
-    elif depth_type == 1:
-        description = f"Depth ({pct}% K Bid/Ask)"
-        ax2.plot(df['timestamp'], df['k'], color='blue')
-        ax2.set_ylabel(description, color='white')
-    elif depth_type == 2:
-        description = f"Depth ({pct}% diff % Bids-Asks)"
-        df['diff'] = (df[depth_lst[1]] - df[depth_lst[0]])/(df[depth_lst[0]] + df[depth_lst[1]]) * 100
-        ax2.plot(df['timestamp'], df['diff'], color='cyan')
-        ax2.set_ylabel(description, color='white')
+    dpi = 100
     
-    ax2.tick_params(axis='y', colors='white')
-    ax2.grid(True, linestyle='--', alpha=0.3, color='gray')
+    # Suppress matplotlib debug messages
+    plt.ioff()  # Turn off interactive mode
+    plt.style.use('dark_background')
+    
+    try:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(width_px/dpi, height_px/dpi), 
+                                       sharex=True, dpi=dpi)
 
-    # Скрываем метки времени на оси X
-    ax1.xaxis.set_visible(False)
-    ax2.xaxis.set_visible(False)
+        # Top plot: best bid/ask
+        ax1.plot(df_sorted['event_time'], df_sorted['best_bid'], 
+                 color='green', label='Best Bid', linewidth=1)
+        ax1.plot(df_sorted['event_time'], df_sorted['best_ask'], 
+                 color='red', label='Best Ask', linewidth=1)
+        ax1.set_ylabel('Price', color='white')
+        ax1.legend()
+        ax1.tick_params(axis='y', colors='white')
+        ax1.grid(True, linestyle='--', alpha=0.3, color='gray')
 
-    # Убираем промежутки между графиками
-    plt.tight_layout()
+        depth_lst = get_depths(pct)
+        description = ""
 
-    plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01, hspace=0.01)
+        # Bottom plot based on depth type
+        if depth_type == 0:
+            description = f"Depth ({pct}% Bid/Ask)"
+            ax2.plot(df_sorted['event_time'], df_sorted[depth_lst[0]], 
+                    color='lightgreen', label=f'Bid {pct}%', linewidth=1)
+            ax2.plot(df_sorted['event_time'], df_sorted[depth_lst[1]], 
+                    color='lightcoral', label=f'Ask {pct}%', linewidth=1)
+            ax2.set_ylabel('Volume', color='white')
+            ax2.legend()
+        elif depth_type == 1:
+            description = f"Depth ({pct}% K Bid/Ask)"
+            if all(col in df_sorted.columns for col in depth_lst):
+                df_sorted['k_ratio'] = (pd.to_numeric(df_sorted[depth_lst[0]], errors='coerce') / 
+                                      pd.to_numeric(df_sorted[depth_lst[1]], errors='coerce'))
+                ax2.plot(df_sorted['event_time'], df_sorted['k_ratio'], 
+                        color='blue', label='Bid/Ask Ratio', linewidth=1)
+                ax2.set_ylabel('Ratio', color='white')
+                ax2.legend()
+        elif depth_type == 2:
+            description = f"Depth ({pct}% diff % Bids-Asks)"
+            if all(col in df_sorted.columns for col in depth_lst):
+                bid_vol = pd.to_numeric(df_sorted[depth_lst[0]], errors='coerce')
+                ask_vol = pd.to_numeric(df_sorted[depth_lst[1]], errors='coerce')
+                df_sorted['diff_pct'] = (bid_vol - ask_vol) / (bid_vol + ask_vol) * 100
+                ax2.plot(df_sorted['event_time'], df_sorted['diff_pct'], 
+                        color='cyan', label='Bid-Ask Diff %', linewidth=1)
+                ax2.set_ylabel('Difference %', color='white')
+                ax2.legend()
+        
+        ax2.tick_params(axis='y', colors='white')
+        ax2.grid(True, linestyle='--', alpha=0.3, color='gray')
 
-    # Сохраняем график в файл
-    plt.savefig(filename, dpi=dpi, bbox_inches='tight')
-    plt.close(fig)
-    plt.close('all')
-    logging.info(f"Saving image to: {os.path.abspath(filename)}")
+        # Format x-axis
+        plt.xticks(rotation=45)
+        plt.tight_layout()
 
-    return filename, description
+        # Save plot
+        plt.savefig(filename, dpi=dpi, bbox_inches='tight', 
+                    facecolor='#1a1a1a', edgecolor='none')
+        
+        logging.info(f"Chart saved: {filename}")
+        return filename, description
+        
+    finally:
+        # Ensure proper cleanup even if there's an error
+        plt.close(fig)
+        plt.close('all')
     
 

@@ -1,25 +1,27 @@
 import aiohttp
 import logging
 from typing import Optional, Dict
-import asyncio
+from datetime import datetime, timedelta
 
 
 class APIClient:
     def __init__(self, base_url: str, username: str, password: str):
-        self.base_url = base_url
+        self.base_url = base_url.rstrip('/')
         self.username = username
         self.password = password
         self.token = None
+        self.token_expiry = None
         self.session = None
 
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
-        await self.authenticate()
-        return self
+    async def ensure_session(self):
+        if not self.session:
+            self.session = aiohttp.ClientSession()
+            await self.authenticate()
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def close(self):
         if self.session:
             await self.session.close()
+            self.session = None
 
     async def authenticate(self) -> bool:
         """Authenticate and get JWT token"""
@@ -31,12 +33,14 @@ class APIClient:
         try:
             async with self.session.post(
                 f"{self.base_url}/auth/token",
-                data=auth_data,
+                data=aiohttp.FormData(auth_data),
                 headers={'accept': 'application/json'}
             ) as response:
                 if response.status == 200:
                     result = await response.json()
                     self.token = result['access_token']
+                    # Предполагаем, что токен живет 30 минут
+                    self.token_expiry = datetime.now() + timedelta(minutes=30)
                     logging.info("Successfully authenticated with API")
                     return True
                 else:
@@ -46,9 +50,15 @@ class APIClient:
             logging.exception(f"Authentication error: {e}")
             return False
 
+    async def is_token_valid(self) -> bool:
+        """Check if token is still valid"""
+        return self.token and self.token_expiry and datetime.now() < self.token_expiry
+
     async def get(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         """Make authenticated GET request"""
-        if not self.token:
+        await self.ensure_session()
+        
+        if not await self.is_token_valid():
             if not await self.authenticate():
                 return {"error": "Authentication failed"}
 
@@ -73,27 +83,20 @@ class APIClient:
                         async with self.session.get(
                             url, params=params, headers=headers
                         ) as retry_response:
-                            return await retry_response.json()
+                            return await self._handle_response(retry_response)
                     else:
                         return {"error": "Re-authentication failed"}
                 
-                return await response.json()
+                return await self._handle_response(response)
         except Exception as e:
             logging.exception(f"Request error: {e}")
             return {"error": str(e)}
 
-# # Usage in your bot
-# async def get_crypto_data():
-#     async with APIClient(
-#         base_url="http://171.22.79.157:8000",
-#         username="your_bot_user",  # Create a dedicated user for the bot
-#         password="your_bot_password"
-#     ) as api_client:
-        
-#         # Get available symbols
-#         symbols = await api_client.get("/crypto/symbols")
-#         print(symbols)
-        
-#         # Get specific symbol data
-#         btc_data = await api_client.get("/crypto/data/BTCUSDT", {"limit": 10})
-#         print(btc_data)
+    async def _handle_response(self, response):
+        """Handle API response"""
+        if response.status == 200:
+            return await response.json()
+        else:
+            error_text = await response.text()
+            logging.error(f"API error {response.status}: {error_text}")
+            return {"error": f"HTTP {response.status}: {error_text}"}
