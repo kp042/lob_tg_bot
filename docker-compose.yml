@@ -1,0 +1,23 @@
+services:
+  lob-tg-bot:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: lob_tg_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - app_logs:/var/log/app
+      - app_images:/tmp/images
+    environment:
+      - UV_PROJECT_ENVIRONMENT=/app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  app_logs:
+  app_images:

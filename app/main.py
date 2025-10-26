@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
 
@@ -11,10 +12,16 @@ from services.api_client import APIClient
 
 
 logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('/var/log/app/bot.log')
+    ]
 )
-
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('PIL').setLevel(logging.WARNING)
+logging.getLogger('aiogram.event').setLevel(logging.INFO)
 
 async def set_main_menu(bot: Bot):
     main_menu_commands = [
@@ -22,7 +29,6 @@ async def set_main_menu(bot: Bot):
         for command, description in LEXICON_MENU.items()
     ]
     await bot.set_my_commands(main_menu_commands)
-
 
 async def main():
     # Initialize bot and dispatcher
@@ -50,10 +56,10 @@ async def main():
     try:
         # Skip accumulated updates and start polling
         await bot.delete_webhook(drop_pending_updates=True)
-        logging.info("Starting LOB TG BOT")
+        logging.info("Starting LOB TG BOT in Docker container")
         await dp.start_polling(bot)
     except Exception as e:
-        logging.exception("Bot stopped with error")
+        logging.exception(f"Bot stopped with error: {e}")
     finally:
         # Cleanup
         await api_client.close()
