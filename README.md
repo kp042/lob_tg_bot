@@ -1,6 +1,6 @@
 # LOB Telegram Bot
 
-A powerful Telegram bot for analyzing Limit Order Book (LOB) data from Binance. This bot provides real-time depth chart visualizations and market data for various cryptocurrency symbols.
+Telegram bot for analyzing Limit Order Book (LOB) data from Binance. This bot provides real-time depth chart visualizations and market data for various cryptocurrency symbols.
 
 ## 📊 Features
 
