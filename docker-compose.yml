@@ -8,10 +8,9 @@ services:
     env_file:
       - .env
     volumes:
-      - app_logs:/var/log/app
       - app_images:/tmp/images
     environment:
-      - UV_PROJECT_ENVIRONMENT=/app
+      - PYTHONPATH=/app
     logging:
       driver: "json-file"
       options:
@@ -19,5 +18,4 @@ services:
         max-file: "3"
 
 volumes:
-  app_logs:
   app_images:

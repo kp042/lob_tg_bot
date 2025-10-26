@@ -1,6 +1,9 @@
 import logging
 import asyncio
 import os
+import sys
+sys.path.append(os.path.dirname(__file__))
+
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
 
@@ -13,11 +16,7 @@ from services.api_client import APIClient
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('/var/log/app/bot.log')
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'    
 )
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 logging.getLogger('PIL').setLevel(logging.WARNING)
