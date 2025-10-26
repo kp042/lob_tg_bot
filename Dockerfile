@@ -12,7 +12,7 @@ COPY requirements.txt .
 
 RUN uv pip install --system -r requirements.txt
 
-COPY app/ ./app/
+COPY app/ .
 
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
@@ -22,4 +22,4 @@ USER appuser
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "-m", "app.main"]
+CMD ["python", "main.py"]
